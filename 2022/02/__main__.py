@@ -55,8 +55,11 @@ class Round:
     opponent_choice: Choice
 
     @classmethod
-    def from_line(cls, line: str) -> "Round":
-        """Parse one line of the strategy file."""
+    def from_first_strategy(cls, line: str) -> "Round":
+        """Parse one line of the strategy file.
+
+        Here the letters X, Y, Z are mapped to player choices.
+        """
         opponent_letter, letter = line.replace("\n", "").split(" ")
 
         opponent_mapper = {
@@ -72,6 +75,39 @@ class Round:
         return Round(
             choice=mapper[letter],
             opponent_choice=opponent_mapper[opponent_letter],
+        )
+
+    @classmethod
+    def from_second_strategy(cls, line: str) -> "Round":
+        """Parse one line of the strategy file.
+
+        Here the letters X, Y, Z are mapped to desired outcomes.
+        """
+        opponent_letter, letter = line.replace("\n", "").split(" ")
+
+        opponent_mapper = {
+            "A": Choice.ROCK,
+            "B": Choice.PAPER,
+            "C": Choice.SCISSORS,
+        }
+        desired_outcomes = {
+            "X": Outcome.LOSS,
+            "Y": Outcome.DRAW,
+            "Z": Outcome.WIN,
+        }
+        desired_outcome = desired_outcomes[letter]
+
+        opponent_choice = opponent_mapper[opponent_letter]
+        if desired_outcome == Outcome.LOSS:
+            choice = opponent_choice.lesser
+        elif desired_outcome == Outcome.DRAW:
+            choice = opponent_choice
+        else:
+            choice = opponent_choice.better
+
+        return Round(
+            choice=choice,
+            opponent_choice=opponent_choice,
         )
 
     @property
@@ -99,6 +135,10 @@ class Round:
 if __name__ == "__main__":
     filepath = os.path.join(os.path.dirname(__file__), "input")
 
-    rounds = (Round.from_line(line) for line in lines(filepath))
+    rounds = (Round.from_first_strategy(line) for line in lines(filepath))
     scores = (rnd.score for rnd in rounds)
-    print(f"Total score: {sum(scores)}")
+    print(f"Total score (1st strategy): {sum(scores)}")
+
+    rounds = (Round.from_second_strategy(line) for line in lines(filepath))
+    scores = (rnd.score for rnd in rounds)
+    print(f"Total score (2nd strategy): {sum(scores)}")
