@@ -1,14 +1,7 @@
+import os
 import typing
 
-
-def lines(filepath: str) -> typing.Iterable[str]:
-    """Stream lines from given file."""
-    with open(filepath, "r") as f:
-        while True:
-            line = f.readline()
-            if line == "":
-                break
-            yield line
+from ..common import lines
 
 
 def calories(lines: typing.Iterable[str]) -> typing.Iterable[int]:
@@ -23,7 +16,8 @@ def calories(lines: typing.Iterable[str]) -> typing.Iterable[int]:
 
 
 if __name__ == "__main__":
-    sorted_calories = sorted(calories(lines("input")))
+    input_path = os.path.join(os.path.dirname(__file__), "input")
+    sorted_calories = sorted(calories(lines(input_path)))
 
     max_calories = sorted_calories[-1]
     print(f"Max calories: {max_calories}")
