@@ -12,6 +12,32 @@ class Choice(enum.Enum):
     PAPER = 2
     SCISSORS = 3
 
+    @property
+    def better(self) -> "Choice":
+        """Return the better choice, i.e. the winner against this one."""
+        mapper = {
+            Choice.SCISSORS: Choice.ROCK,
+            Choice.ROCK: Choice.PAPER,
+            Choice.PAPER: Choice.SCISSORS,
+        }
+        return mapper[self]
+
+    @property
+    def lesser(self) -> "Choice":
+        """Return the lesser choice, i.e. the loser against this one."""
+        mapper = {
+            Choice.ROCK: Choice.SCISSORS,
+            Choice.PAPER: Choice.ROCK,
+            Choice.SCISSORS: Choice.PAPER,
+        }
+        return mapper[self]
+
+    def __gt__(self, other: "Choice") -> bool:
+        return other == self.lesser
+
+    def __lt__(self, other: "Choice") -> bool:
+        return other == self.better
+
 
 class Outcome(enum.Enum):
     """Possible outcomes and their respective scores."""
@@ -51,19 +77,13 @@ class Round:
     @property
     def outcome(self) -> Outcome:
         """Round outcome."""
-        beats = {
-            Choice.ROCK: Choice.SCISSORS,
-            Choice.PAPER: Choice.ROCK,
-            Choice.SCISSORS: Choice.PAPER,
-        }
-
         if self.choice == self.opponent_choice:
             return Outcome.DRAW
 
-        if beats[self.choice] == self.opponent_choice:
+        if self.choice > self.opponent_choice:
             return Outcome.WIN
 
-        if beats[self.opponent_choice] == self.choice:
+        if self.opponent_choice > self.choice:
             return Outcome.LOSS
 
         raise ValueError(
