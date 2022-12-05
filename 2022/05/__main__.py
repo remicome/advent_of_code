@@ -58,10 +58,31 @@ class Move:
         )
 
 
-def part_one(input_string: str) -> str:
+class Move9001(Move):
+    """Updated move using a CrateHolder9001."""
+
+    def apply(self, queues: list) -> list:
+        """Apply the move: all crates are moved in a single step."""
+        queues = copy.deepcopy(queues)
+        origin_queue = queues[self.origin]
+        target_queue = queues[self.target]
+
+        target_queue += origin_queue[-self.depth :]
+        queues[self.origin] = origin_queue[: -self.depth]
+        return queues
+
+
+def apply_all_moves(input_string: str, crate_mover: typing.Type[Move] = Move) -> str:
+    """Apply all moves and return the string of top queue elements.
+
+    Args:
+        * crate_mover: move class to use
+    """
     queues_description, moves_description = input_string.split("\n\n")
 
-    moves = (Move.from_line(line) for line in moves_description.split("\n") if line)
+    moves = (
+        crate_mover.from_line(line) for line in moves_description.split("\n") if line
+    )
     queues = parse_queues(queues_description)
     for move in moves:
         queues = move.apply(queues)
@@ -73,5 +94,8 @@ if __name__ == "__main__":
     with open(filepath, "r") as f:
         input_string = f.read()
 
-    top_items = part_one(input_string)
-    print(f"Top items after all moves are applied: {top_items}")
+    top_items = apply_all_moves(input_string)
+    print(f"Top items after all moves are applied (CrateMover9000): {top_items}")
+
+    top_items = apply_all_moves(input_string, crate_mover=Move9001)
+    print(f"Top items after all moves are applied (CrateMover9001): {top_items}")
