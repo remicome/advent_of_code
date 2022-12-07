@@ -50,3 +50,14 @@ if __name__ == "__main__":
     directory_sizes = (file.size for file in files if isinstance(file, Directory))
     small_directory_sizes = (size for size in directory_sizes if size <= size_limit)
     print(f"Sum of small sizes: {sum(small_directory_sizes)}")
+
+    total_space = 70000000
+    needed_space = 30000000
+    used_space = files[0].size
+    minimum_deletion_size = used_space + needed_space - total_space
+    possible_directory_sizes = (
+        file.size
+        for file in files
+        if isinstance(file, Directory) and file.size >= minimum_deletion_size
+    )
+    print(f"Minimal deletion size: {min(possible_directory_sizes)}")
