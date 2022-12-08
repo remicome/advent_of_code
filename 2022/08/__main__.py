@@ -1,3 +1,4 @@
+import dataclasses
 import itertools
 import os
 
@@ -11,17 +12,54 @@ def read_grid(filepath: str) -> list:
     return [[int(height) for height in row] for row in heights]
 
 
+@dataclasses.dataclass
+class Compass:
+    """List of trees visible from the center of the compass in any direction.
+
+    The trees are listed starting from the one closest to the center.
+    """
+
+    center: int
+    west: list
+    east: list
+    north: list
+    south: list
+
+    @classmethod
+    def from_position(cls, grid: list, i: int, j: int) -> "Compass":
+        return cls(
+            center=grid[i][j],
+            west=grid[i][:j][::-1],
+            east=grid[i][j + 1 :],
+            south=[row[j] for row in grid[i + 1 :]],
+            north=[row[j] for row in grid[:i][::-1]],
+        )
+
+
 def is_visible(grid: list, i: int, j: int) -> bool:
     """Is the tree at position i, j visible?"""
-    west = grid[i][:j]
-    east = grid[i][j + 1 :]
-    north = [row[j] for row in grid[i + 1 :]]
-    south = [row[j] for row in grid[:i]]
-
-    tree = grid[i][j]
+    compass = Compass.from_position(grid, i, j)
     return any(
-        all(tree > other_tree for other_tree in direction)
-        for direction in (west, east, north, south)
+        all(compass.center > other_tree for other_tree in direction)
+        for direction in (compass.west, compass.east, compass.north, compass.south)
+    )
+
+
+def scenic_score(grid: list, i: int, j: int) -> int:
+    """Compute the scenic score for this tree"""
+    compass = Compass.from_position(grid, i, j)
+
+    def n_visible(tree, direction) -> int:
+        for i, other in enumerate(direction):
+            if other >= tree:
+                return i + 1
+        return len(direction)
+
+    return (
+        n_visible(compass.center, compass.west)
+        * n_visible(compass.center, compass.east)
+        * n_visible(compass.center, compass.north)
+        * n_visible(compass.center, compass.south)
     )
 
 
@@ -33,3 +71,9 @@ if __name__ == "__main__":
         is_visible(grid, i, j) for i, j in itertools.product(range(len(grid)), repeat=2)
     )
     print(f"Visible trees: {sum(visible)}")
+
+    scores = (
+        scenic_score(grid, i, j)
+        for i, j in itertools.product(range(len(grid)), repeat=2)
+    )
+    print(f"Max scenic score: {max(scores)}")
