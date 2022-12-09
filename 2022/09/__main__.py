@@ -3,6 +3,10 @@ import enum
 import os
 import typing
 
+import matplotlib.axes
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+
 from ..common import lines
 
 
@@ -108,6 +112,17 @@ class Bridge:
 
         return Bridge(head=head, knots=knots)
 
+    def plot(
+        self,
+        ax: typing.Optional[matplotlib.axes.Axes] = None,
+    ) -> matplotlib.axes.Axes:
+        if ax is None:
+            _, ax = plt.subplots()
+
+        x = [self.head.x] + [knot.x for knot in self.knots]
+        y = [self.head.y] + [knot.y for knot in self.knots]
+        return ax.plot(x, y)
+
 
 def bridges(filepath, number_of_knots=1) -> typing.Iterable[Bridge]:
     moves = (Move.from_line(line) for line in lines(filepath))
@@ -132,4 +147,17 @@ if __name__ == "__main__":
     }
     print(f"Different positions with 10 knots: {len(tail_positions)}")
 
-    filepath = os.path.join(os.path.dirname(__file__), "test_input")
+    # Plot it!
+    print("Plotting...")
+    all_bridges = list(bridges(filepath, number_of_knots=9))
+    xmin = min(bridge.head.x for bridge in all_bridges)
+    xmax = max(bridge.head.x for bridge in all_bridges)
+    ymin = min(bridge.head.y for bridge in all_bridges)
+    ymax = max(bridge.head.y for bridge in all_bridges)
+    for i, bridge in tqdm(enumerate(all_bridges), total=len(all_bridges)):
+        fig, ax = plt.subplots()
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
+        bridge.plot(ax=ax)
+        fig.savefig(f"bridge{i:05}.png")
+        plt.close(fig)
