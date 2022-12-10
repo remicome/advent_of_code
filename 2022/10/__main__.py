@@ -26,6 +26,23 @@ def registers(instructions: typing.Iterable[str]) -> typing.Iterable[int]:
             yield register
 
 
+def pixels(registers: typing.Iterable[int], width: int = 40) -> typing.Iterable[bool]:
+    """Generate per-cycle pixel values."""
+    for cycle, register in enumerate(registers):
+        drawing_position = cycle % width
+        yield (-1 <= drawing_position - register <= 1)
+
+
+def crt_lines(pixels: typing.Iterable[int], width: int = 40) -> typing.Iterable[str]:
+    """Generate screen lines."""
+    line = ""
+    for cycle, pixel in enumerate(pixels):
+        line += "█" if pixel else " "
+        if cycle % width == width - 1:
+            yield line
+            line = ""
+
+
 if __name__ == "__main__":
     filepath = os.path.join(os.path.dirname(__file__), "input")
 
@@ -38,3 +55,11 @@ if __name__ == "__main__":
         if cycle + 1 in cycles_to_look_for
     )
     print(f"Sum of signal strengths: {sum(signal_strengths)}")
+
+    # Part 2
+    print("Screen message:")
+    instructions = lines(filepath)
+    registers_ = registers(instructions)
+    pixels_ = pixels(registers_)
+    for line in crt_lines(pixels_):
+        print(line)
