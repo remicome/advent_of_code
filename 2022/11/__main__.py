@@ -3,6 +3,7 @@ import enum
 import logging
 import os
 import typing
+from functools import reduce
 
 logger = logging.getLogger(__name__)
 
@@ -138,8 +139,17 @@ def descriptions(filepath: str) -> typing.Iterable[str]:
         return f.read().split("\n\n")
 
 
-def play(monkeys: list, manageable_worry_level: bool = True) -> typing.List[Monkey]:
-    """Play a single round of keep away and return the updated monkey states."""
+def play(
+    monkeys: list,
+    manageable_worry_level: bool = True,
+    modulo: typing.Optional[int] = None,
+) -> typing.List[Monkey]:
+    """Play a single round of keep away and return the updated monkey states.
+
+    Args:
+        * modulo: if not None, then all worry levels are replaced with their value
+          modulo `modulo`.
+    """
 
     def relief(item: int):
         """
@@ -152,6 +162,8 @@ def play(monkeys: list, manageable_worry_level: bool = True) -> typing.List[Monk
         for item in monkey.inspect():
             if manageable_worry_level:
                 item = relief(item)
+            if modulo is not None:
+                item = item % modulo
             recipient = monkey.throw(item)
             monkeys[recipient].receive(item)
 
@@ -163,7 +175,6 @@ def play(monkeys: list, manageable_worry_level: bool = True) -> typing.List[Monk
 
 # Day 1
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
     filepath = os.path.join(os.path.dirname(__file__), "input")
 
     # Part 1
@@ -181,9 +192,13 @@ if __name__ == "__main__":
     monkeys = [
         Monkey.from_description(description) for description in descriptions(filepath)
     ]
+    # Work modulo the product of all dividers so that worry levels are manageables but
+    # tests still have the same outcomes
+    dividers = (monkey.test.divider for monkey in monkeys)
+    divider_product = reduce(lambda x, y: x * y, dividers)
     for rnd in range(10000):
         logger.debug(f"==== Round {rnd} ====")
-        monkeys = play(monkeys, manageable_worry_level=False)
+        monkeys = play(monkeys, manageable_worry_level=False, modulo=divider_product)
 
     inspected_items = (monkey.inspected_items for monkey in monkeys)
     best, second = list(sorted(inspected_items))[-2:]
