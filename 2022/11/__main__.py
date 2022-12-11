@@ -1,7 +1,10 @@
 import dataclasses
 import enum
+import logging
 import os
 import typing
+
+logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass
@@ -83,6 +86,7 @@ class Monkey:
         * inspected_items: the number of items this money has inspected so far
     """
 
+    identifier: int
     items: typing.List[int]
     operation: Operation
     test: Test
@@ -90,14 +94,16 @@ class Monkey:
 
     @classmethod
     def from_description(cls, description: str) -> "Monkey":
-        # Discard the identifier string: monkeys are listed in ascending order
-        _, items, operation, *test = description.split("\n")
+        identifier, items, operation, *test = description.split("\n")
+
+        identifier = int(identifier.split(" ")[-1].replace(":", ""))
 
         # Only keep the second half of the string, the parse numbers
         _, items = items.split(":")
         items = [int(item) for item in items.replace(" ", "").split(",")]
 
         return cls(
+            identifier=identifier,
             items=items,
             operation=Operation.from_description(operation),
             test=Test.from_description("\n".join(test)),
@@ -110,14 +116,18 @@ class Monkey:
         """
         while self.items:
             item = self.items.pop(0)
+            logger.debug(f"Monkey {self.identifier}: inspecting {item}")
             self.inspected_items += 1
             yield self.operation(item)
 
     def throw(self, item: int) -> int:
         """Get the recipient identifier for this item."""
-        return self.test(item)
+        recipient = self.test(item)
+        logger.debug(f"Monkey {self.identifier}: throwing {item} to {recipient}")
+        return recipient
 
     def receive(self, item: int):
+        logger.debug(f"Monkey {self.identifier}: received {item}")
         """Receive an item from another monkey. Acts inplace."""
         self.items.append(item)
 
@@ -128,7 +138,7 @@ def descriptions(filepath: str) -> typing.Iterable[str]:
         return f.read().split("\n\n")
 
 
-def play(monkeys: list) -> typing.List[Monkey]:
+def play(monkeys: list, manageable_worry_level: bool = True) -> typing.List[Monkey]:
     """Play a single round of keep away and return the updated monkey states."""
 
     def relief(item: int):
@@ -140,17 +150,23 @@ def play(monkeys: list) -> typing.List[Monkey]:
 
     for monkey in monkeys:
         for item in monkey.inspect():
-            item = relief(item)
+            if manageable_worry_level:
+                item = relief(item)
             recipient = monkey.throw(item)
             monkeys[recipient].receive(item)
+
+    inspected_items = [monkey.inspected_items for monkey in monkeys]
+    logger.debug(f"Numberg of inspected items: {inspected_items}")
 
     return monkeys
 
 
 # Day 1
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
     filepath = os.path.join(os.path.dirname(__file__), "input")
 
+    # Part 1
     monkeys = [
         Monkey.from_description(description) for description in descriptions(filepath)
     ]
@@ -160,3 +176,15 @@ if __name__ == "__main__":
     inspected_items = (monkey.inspected_items for monkey in monkeys)
     best, second = list(sorted(inspected_items))[-2:]
     print(f"Monkey business level is {best * second}")
+
+    # Part 2
+    monkeys = [
+        Monkey.from_description(description) for description in descriptions(filepath)
+    ]
+    for rnd in range(10000):
+        logger.debug(f"==== Round {rnd} ====")
+        monkeys = play(monkeys, manageable_worry_level=False)
+
+    inspected_items = (monkey.inspected_items for monkey in monkeys)
+    best, second = list(sorted(inspected_items))[-2:]
+    print(f"Monkey business level after 10000 unmanageable rounds: {best * second}")
