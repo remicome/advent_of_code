@@ -88,3 +88,8 @@ if __name__ == "__main__":
 
     distances = distance_to(points, target)
     print(f"Distance from origin to target: {distances[origin]}")
+
+    shorted_hike = min(
+        distance for point, distance in distances.items() if point.z == 0
+    )
+    print(f"Shorted hike: {shorted_hike}")
