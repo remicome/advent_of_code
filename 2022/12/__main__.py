@@ -7,58 +7,23 @@ from ..common import lines
 
 @dataclasses.dataclass
 class Point:
-    """A topographic point on the grid."""
-
     x: int
     y: int
-    z: int
-
-    def precedes(self, other: "Point") -> bool:
-        """Return True if we can step from this point to other in one step."""
-        neighbouring = abs(self.x - other.x) + abs(self.y - other.y) == 1
-        not_too_high = (other.z - self.z) <= 1
-        return neighbouring and not_too_high
-
-    def predecessors(self, points: typing.Iterable["Point"]) -> typing.Set["Point"]:
-        """
-        This point's predecessors: neighrbourd from which we can reach this point in
-        one step.
-        """
-        # FIXME: this is ugly, as we don't use the coordinates to look for neighbours
-        # directly
-        return {point for point in points if point.precedes(self)}
 
     def __hash__(self) -> int:
-        """Make this hashable to use in sets and dictionnaries."""
-        return hash((self.x, self.y, self.z))
+        return hash((self.x, self.y))
+
+    def __add__(self, other: "Point") -> "Point":
+        return Point(x=self.x + other.x, y=self.y + other.y)
 
 
-def read_grid(lines: typing.Iterable[str]) -> tuple:
-    """
-    Parse the grid; return a tuple containing the list of all points, an origin and a
-    target.
-    """
-    points = []
-    for j, line in enumerate(lines):
-        for i, character in enumerate(line):
-            if character == "S":
-                origin = point = Point(x=i, y=j, z=0)
-            elif character == "E":
-                target = point = Point(x=i, y=j, z=25)
-            else:
-                point = Point(x=i, y=j, z=ord(character) - ord("a"))
-            points.append(point)
-
-    return points, origin, target
-
-
-def distance_to(points: typing.List[Point], target: Point) -> dict:
+def distance_to(grid: dict, target: Point) -> dict:
     """Measure distance to the target iteratively."""
 
-    def grow(measures: dict, grid: list) -> dict:
+    def grow(measures: dict, grid: dict) -> dict:
         """
-        Grow a set of points by adding its direct predecessors (points which are at
-        distance one from already-measured points).
+        Given a set of points whose distance to the target has been measured, compute
+        the distance for all predecessors.
         """
         last_measures = {
             point: measure
@@ -68,7 +33,7 @@ def distance_to(points: typing.List[Point], target: Point) -> dict:
         new_measures = {
             predecessor: distance + 1
             for point, distance in last_measures.items()
-            for predecessor in point.predecessors(grid)
+            for predecessor in predecessors(point, grid)
             if predecessor not in measures
         }
         return measures | new_measures
@@ -77,19 +42,59 @@ def distance_to(points: typing.List[Point], target: Point) -> dict:
     previous_measures = {}
     while previous_measures != measures:
         previous_measures = measures
-        measures = grow(measures, points)
+        measures = grow(measures, grid)
 
     return measures
 
 
+def neighbours(point: Point, grid: dict) -> typing.Iterable[Point]:
+    """Iterate on the points' neighbours"""
+    neighbours = (
+        point + offset
+        for offset in (Point(-1, 0), Point(1, 0), Point(0, -1), Point(0, 1))
+    )
+    return (neighbour for neighbour in neighbours if neighbour in grid)
+
+
+def predecessors(point: Point, grid: dict) -> typing.Iterable[Point]:
+    """
+    This point's predecessors: neighbours from which we can reach this point in
+    one step.
+    """
+    return (
+        neighbour
+        for neighbour in neighbours(point, grid=grid)
+        if (grid[point] - grid[neighbour]) <= 1
+    )
+
+
+def read_grid(filepath: str) -> tuple:
+    """Parse the grid; return a tuple containing all heights, an origin and a target."""
+    grid = {}
+    for j, line in enumerate(lines(filepath)):
+        for i, character in enumerate(line):
+            point = Point(i, j)
+            if character == "S":
+                origin = point
+                height = 0
+            elif character == "E":
+                target = point
+                height = 25
+            else:
+                height = ord(character) - ord("a")
+            grid[point] = height
+
+    return grid, origin, target
+
+
 if __name__ == "__main__":
     filepath = os.path.join(os.path.dirname(__file__), "input")
-    points, origin, target = read_grid(lines(filepath))
+    grid, origin, target = read_grid(filepath)
 
-    distances = distance_to(points, target)
+    distances = distance_to(grid, target)
     print(f"Distance from origin to target: {distances[origin]}")
 
     shorted_hike = min(
-        distance for point, distance in distances.items() if point.z == 0
+        distance for point, distance in distances.items() if grid[point] == 0
     )
     print(f"Shorted hike: {shorted_hike}")
