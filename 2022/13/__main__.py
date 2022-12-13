@@ -1,3 +1,4 @@
+import dataclasses
 import json
 import os
 import typing
@@ -43,11 +44,50 @@ def compare(
     raise ValueError
 
 
+@dataclasses.dataclass
+class Packet:
+    """Implement the '<' to sort packets with builtin methods."""
+
+    data: list
+
+    def __lt__(self, other: "Packet") -> bool:
+        comparison = compare(self.data, other.data)
+        if comparison is None:
+            raise ValueError("Cannot compare packets.")
+        return comparison
+
+
+# Special divider packets to insert in input
+dividers = (Packet([[2]]), Packet([[6]]))
+
+
+def packets(filepath, dividers=dividers) -> typing.Iterable[Packet]:
+    """Yield packets from filepath, including the two extra dividers."""
+    yield from dividers
+
+    with open(filepath, "r") as f:
+        while line := f.readline():
+            if line != "\n":
+                data = json.loads(line)
+                yield Packet(data)
+
+
+def decoder_key(packets: typing.Iterable[Packet], dividers=dividers) -> int:
+    left, right = dividers
+    sorted_packets = sorted(packets)
+    return (1 + sorted_packets.index(left)) * (1 + sorted_packets.index(right))
+
+
 if __name__ == "__main__":
     filepath = os.path.join(os.path.dirname(__file__), "input")
 
+    # Part 1
     comparisons = (compare(left, right) for left, right in pairs(filepath))
     sum_of_indices = sum(
         i + 1 for i, comparison in enumerate(comparisons) if comparison
     )
     print(f"Sum of indices of ordered pairs: {sum_of_indices}")
+
+    # Part 2
+    key = decoder_key(packets(filepath))
+    print(f"Decoder key: {key}")
