@@ -3,7 +3,7 @@ import itertools
 import os
 import typing
 
-from .cave import Cave
+from .cave import Cave, RockFloorCave
 from .definitions import Material, Point
 
 
@@ -43,11 +43,24 @@ def fill_cave(cave: Cave, start: Point = Point(500, 0)):
     while sand_position := rest_position(cave):
         cave[sand_position] = Material.Sand
 
+        # Stop when no more sand can be added
+        if sand_position == start:
+            break
+
 
 if __name__ == "__main__":
     filepath = os.path.join(os.path.dirname(__file__), "input")
 
+    # Part 1
     cave = Cave.from_file(filepath)
     fill_cave(cave)
+    print(cave)
+    number_of_sand_units = sum(1 for _, material in cave if material == Material.Sand)
+    print(f"Number of cases filled with sands: {number_of_sand_units}")
+
+    # Part 2
+    cave = RockFloorCave.from_file(filepath)
+    fill_cave(cave)
+    print(cave)
     number_of_sand_units = sum(1 for _, material in cave if material == Material.Sand)
     print(f"Number of cases filled with sands: {number_of_sand_units}")

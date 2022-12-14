@@ -1,4 +1,5 @@
 import dataclasses
+import functools
 import itertools
 import typing
 
@@ -29,7 +30,7 @@ class Cave:
     def __iter__(self) -> typing.Iterable:
         yield from self.data.items()
 
-    @property
+    @functools.cached_property
     def rock_floor(self) -> int:
         """y coordinate of the cave's rock floor"""
         return max(point.y for point in self.data.keys())
@@ -58,7 +59,7 @@ class Cave:
                     for y in range(ymin, ymax + 1):
                         data[Point(x, y)] = Material.Rock
 
-        return Cave(data)
+        return cls(data)
 
     def __repr__(self) -> str:
         """Reproduce the website's plot"""
@@ -77,3 +78,21 @@ class Cave:
             return "".join(mapper[self[x, y]] for x in range(xmin - 1, xmax + 2)) + "\n"
 
         return "".join(line(y) for y in range(ymin - 1, ymax + 2))
+
+
+@dataclasses.dataclass(repr=False)
+class RockFloorCave(Cave):
+    """Cave with an infinite rock floor"""
+
+    def __getitem__(self, key: typing.Union[Point, tuple]) -> Material:
+        if isinstance(key, tuple):
+            key = Point(*key)
+        if key.y == self.rock_floor:
+            # We have reached the rock floor
+            return Material.Rock
+        return self.data.get(key, Material.Air)
+
+    @functools.cached_property
+    def rock_floor(self) -> int:
+        """y coordinate of the cave's rock floor"""
+        return 2 + super().rock_floor
