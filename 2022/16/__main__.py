@@ -1,4 +1,5 @@
 import dataclasses
+import itertools
 import logging
 import os
 import re
@@ -65,6 +66,7 @@ def relieved_pressure(
         return total_relieved_pressure, remaining_time
 
     relieved_pressure = 0
+    remaining_time = time
     for target in valves:
         logger.debug(f"Remaining time: {time} minutes.")
         pressure, remaining_time = open_valve(origin, target, starting_time=time)
@@ -165,12 +167,142 @@ def branch_and_bound(graph: nx.Graph) -> int:
     return current_max, best_path
 
 
+# ===============  Part 2  ===================================
+def upper_bound2(
+    left_prefix: tuple,
+    right_prefix: tuple,
+    graph: nx.Graph,
+    origin: str = "AA",
+    time: int = 26,
+    distance: typing.Optional[dict] = None,
+) -> int:
+    """
+    Upper bound on the total relieved pressure we may achieve if we open all
+    valves.
+    """
+    if distance is None:
+        distance = nx.floyd_warshall(graph)
+
+    left_pressure, left_time = relieved_pressure(
+        left_prefix, origin=origin, time=time, graph=graph, distance=distance
+    )
+    right_pressure, right_time = relieved_pressure(
+        right_prefix, origin=origin, time=time, graph=graph, distance=distance
+    )
+
+    # From here on, open all remaining valves
+    remaining_valves = [
+        node
+        for node in graph.nodes
+        if graph.nodes[node]["flow_rate"] > 0 and node not in left_prefix + right_prefix
+    ]
+    if not remaining_valves:
+        return left_pressure + right_pressure
+
+    left_origin = left_prefix[-1] if left_prefix else origin
+    right_origin = right_prefix[-1] if right_prefix else origin
+    min_distance = min(
+        min(distance[left_origin][valve] for valve in remaining_valves),
+        min(distance[right_origin][valve] for valve in remaining_valves),
+    )
+    total_flow_rate = sum(graph.nodes[valve]["flow_rate"] for valve in remaining_valves)
+    remaining_time = max(left_time, right_time) - int(min_distance) - 1
+    if remaining_time <= 0:
+        remaining_pressure = 0
+    else:
+        remaining_pressure = remaining_time * total_flow_rate
+
+    return left_pressure + right_pressure + remaining_pressure
+
+
+def branch2(
+    left_prefix: tuple,
+    right_prefix: tuple,
+    graph: nx.Graph,
+) -> typing.Iterable[tuple]:
+    """Branch on a two parallel prefixes by appending all valves which are not in it."""
+    # Only list valves whose opening makes sense
+    available_valves = [
+        valve
+        for valve in graph.nodes
+        if graph.nodes[valve]["flow_rate"] > 0
+        and valve not in left_prefix + right_prefix
+    ]
+    # Append a single valve to left and right
+    yield from ((left_prefix + (valve,), right_prefix) for valve in available_valves)
+    yield from ((left_prefix, right_prefix + (valve,)) for valve in available_valves)
+    # Append two valves at once
+    yield from (
+        (left_prefix + (left_valve,), right_prefix + (right_valve,))
+        for left_valve, right_valve in itertools.combinations(available_valves, r=2)
+    )
+    yield from (
+        (left_prefix + (left_valve,), right_prefix + (right_valve,))
+        for right_valve, left_valve in itertools.combinations(available_valves, r=2)
+    )
+
+
+def branch_and_bound2(graph: nx.Graph, time=26, heuristic_max: int = 0) -> int:
+    """
+    Implement a branch and bound algorithm to find the optimal path, using two
+    parallel agents.
+    """
+    best_path = (tuple(), tuple())
+    prefixes = branch2(*best_path, graph=graph)
+    queue = list(prefixes)
+
+    distance = nx.floyd_warshall(graph)
+
+    current_max = heuristic_max
+    while queue:
+        left_prefix, right_prefix = queue.pop()
+        if (
+            upper_bound2(
+                left_prefix, right_prefix, time=time, graph=graph, distance=distance
+            )
+            < current_max
+        ):
+            # Exclude this branch
+            continue
+        left_pressure, left_remaining_time = relieved_pressure(
+            left_prefix,
+            time=time,
+            graph=graph,
+            distance=distance,
+        )
+        right_pressure, right_remaining_time = relieved_pressure(
+            right_prefix,
+            time=time,
+            graph=graph,
+            distance=distance,
+        )
+        pressure = left_pressure + right_pressure
+        if pressure > current_max:
+            best_path = left_prefix, right_prefix
+            current_max = pressure
+
+        if max(left_remaining_time, right_remaining_time) <= 0:
+            # This prefix cannot be expanded anymore
+            continue
+        else:
+            # Branch: add possible continuation valves to open
+            queue += list(branch2(left_prefix, right_prefix, graph=graph))
+
+    return current_max, best_path
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     filepath = os.path.join(os.path.dirname(__file__), "input")
 
     graph = read_graph(filepath)
     distance = nx.floyd_warshall(graph)
-    relieved_pressure, best_path = branch_and_bound(graph)
-    print(f"Maximal relieved pressure: {relieved_pressure}.")
+    max_pressure, best_path = branch_and_bound(graph)
+    print(f"Maximal relieved pressure: {max_pressure}.")
+    print(f"Valves to open, in order: {best_path}.")
+
+    # We expect to perform better with two agents, even if we have less time -> use the
+    # latest max as a heuristic.
+    max_pressure, best_path = branch_and_bound2(graph, heuristic_max=max_pressure)
+    print(f"Maximal relieved pressure: {max_pressure}.")
     print(f"Valves to open, in order: {best_path}.")
