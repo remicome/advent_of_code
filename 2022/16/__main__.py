@@ -1,4 +1,5 @@
 import dataclasses
+import datetime
 import itertools
 import logging
 import os
@@ -139,7 +140,7 @@ def branch(prefix: tuple, graph: nx.Graph) -> typing.List[tuple]:
     ]
 
 
-def branch_and_bound(graph: nx.Graph) -> int:
+def branch_and_bound(graph: nx.Graph) -> tuple:
     """Implement a branch and bound algorithm to find the optimal path."""
     prefixes = branch(tuple(), graph=graph)
     queue = list(prefixes)
@@ -236,20 +237,30 @@ def branch2(
         if graph.nodes[valve]["flow_rate"] > 0
         and valve not in left_prefix + right_prefix
     ]
-    # Append a single valve to left and right
+    suffixes = available_valves + [None]
+
+    if not (left_prefix or right_prefix):
+        # Special case: use left/right symmetry to avoid exploring duplicate paths
+        yield from (
+            ((left_valve,), (right_valve,))
+            for left_valve, right_valve in itertools.combinations(suffixes, r=2)
+        )
     if left_prefix and left_prefix[-1] is None:
         # Only append nodes to the right
         yield from (
-            (left_prefix, right_prefix + (valve,)) for valve in available_valves
+            (left_prefix, right_prefix + (valve,))
+            for valve in suffixes
+            if valve is not None
         )
     elif right_prefix and right_prefix[-1] is None:
         # Only append nodes to the left
         yield from (
-            (left_prefix + (valve,), right_prefix) for valve in available_valves
+            (left_prefix + (valve,), right_prefix)
+            for valve in suffixes
+            if valve is not None
         )
     else:
         # Append nodes to the two prefixes at once
-        suffixes = available_valves + [None]
         yield from (
             (left_prefix + (left_valve,), right_prefix + (right_valve,))
             for left_valve, right_valve in itertools.combinations(suffixes, r=2)
@@ -260,7 +271,7 @@ def branch2(
         )
 
 
-def branch_and_bound2(graph: nx.Graph, time=26, heuristic_max: int = 0) -> int:
+def branch_and_bound2(graph: nx.Graph, time=26, heuristic_max: int = 0) -> tuple:
     """
     Implement a branch and bound algorithm to find the optimal path, using two
     parallel agents.
@@ -274,13 +285,19 @@ def branch_and_bound2(graph: nx.Graph, time=26, heuristic_max: int = 0) -> int:
     current_max = heuristic_max
     while queue:
         left_prefix, right_prefix = queue.pop()
-        if (
-            upper_bound2(
-                left_prefix, right_prefix, time=time, graph=graph, distance=distance
-            )
-            < current_max
-        ):
+        logger.debug(f"Exploring {left_prefix}, {right_prefix}")
+
+        bound = upper_bound2(
+            left_prefix,
+            right_prefix,
+            time=time,
+            graph=graph,
+            distance=distance,
+        )
+        logger.debug(f"Upper bound: {bound} (current maximum: {current_max})")
+        if bound < current_max:
             # Exclude this branch
+            logger.debug("-----> dropping branch")
             continue
         left_pressure, left_remaining_time = relieved_pressure(
             left_prefix,
@@ -296,11 +313,17 @@ def branch_and_bound2(graph: nx.Graph, time=26, heuristic_max: int = 0) -> int:
         )
         pressure = left_pressure + right_pressure
         if pressure > current_max:
+            logger.debug(f"Maximum update: {current_max} -> {pressure}")
             best_path = left_prefix, right_prefix
             current_max = pressure
 
-        if max(left_remaining_time, right_remaining_time) <= 0:
+        if (
+            (left_remaining_time <= 0 and right_prefix and right_prefix[-1] is None)
+            or (right_remaining_time <= 0 and left_prefix and left_prefix[-1] is None)
+            or (right_remaining_time <= 0 and left_remaining_time <= 0)
+        ):
             # This prefix cannot be expanded anymore
+            logger.debug("cannot continue this path -> dropping branch")
             continue
         else:
             # Branch: add possible continuation valves to open
@@ -311,7 +334,7 @@ def branch_and_bound2(graph: nx.Graph, time=26, heuristic_max: int = 0) -> int:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    filepath = os.path.join(os.path.dirname(__file__), "test_input")
+    filepath = os.path.join(os.path.dirname(__file__), "input")
 
     graph = read_graph(filepath)
     distance = nx.floyd_warshall(graph)
@@ -321,6 +344,9 @@ if __name__ == "__main__":
 
     # We expect to perform better with two agents, even if we have less time -> use the
     # latest max as a heuristic.
+    start_time = datetime.datetime.now()
     max_pressure, best_path = branch_and_bound2(graph, heuristic_max=max_pressure)
+    elapsed_time = datetime.datetime.now() - start_time
     print(f"Maximal relieved pressure: {max_pressure}.")
     print(f"Valves to open, in order: {best_path}.")
+    logger.info(f"Elapsed time: {elapsed_time}")
