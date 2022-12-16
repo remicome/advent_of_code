@@ -59,6 +59,11 @@ def relieved_pressure(
     if distance is None:
         distance = nx.floyd_warshall(graph)
 
+    if valves and valves[-1] is None:
+        # Special case: valves may be terminated by a None suffix, meaning that this
+        # path will not be branched upon during optimization.
+        valves = valves[:-1]
+
     def open_valve(origin: str, target: str, starting_time: int) -> tuple:
         """Open a single valve. Return a tuple (relieved_pressure, remaining_time)."""
         remaining_time = starting_time - int(distance[origin][target]) - 1
@@ -199,8 +204,8 @@ def upper_bound2(
     if not remaining_valves:
         return left_pressure + right_pressure
 
-    left_origin = left_prefix[-1] if left_prefix else origin
-    right_origin = right_prefix[-1] if right_prefix else origin
+    left_origin = left_prefix[-1] if left_prefix and left_prefix[-1] else origin
+    right_origin = right_prefix[-1] if right_prefix and right_prefix[-1] else origin
     min_distance = min(
         min(distance[left_origin][valve] for valve in remaining_valves),
         min(distance[right_origin][valve] for valve in remaining_valves),
@@ -220,7 +225,10 @@ def branch2(
     right_prefix: tuple,
     graph: nx.Graph,
 ) -> typing.Iterable[tuple]:
-    """Branch on a two parallel prefixes by appending all valves which are not in it."""
+    """Branch on a two parallel prefixes by appending all valves which are not in it.
+
+    A prefix terminating with `None` means that this path will not be continued.
+    """
     # Only list valves whose opening makes sense
     available_valves = [
         valve
@@ -229,17 +237,27 @@ def branch2(
         and valve not in left_prefix + right_prefix
     ]
     # Append a single valve to left and right
-    yield from ((left_prefix + (valve,), right_prefix) for valve in available_valves)
-    yield from ((left_prefix, right_prefix + (valve,)) for valve in available_valves)
-    # Append two valves at once
-    yield from (
-        (left_prefix + (left_valve,), right_prefix + (right_valve,))
-        for left_valve, right_valve in itertools.combinations(available_valves, r=2)
-    )
-    yield from (
-        (left_prefix + (left_valve,), right_prefix + (right_valve,))
-        for right_valve, left_valve in itertools.combinations(available_valves, r=2)
-    )
+    if left_prefix and left_prefix[-1] is None:
+        # Only append nodes to the right
+        yield from (
+            (left_prefix, right_prefix + (valve,)) for valve in available_valves
+        )
+    elif right_prefix and right_prefix[-1] is None:
+        # Only append nodes to the left
+        yield from (
+            (left_prefix + (valve,), right_prefix) for valve in available_valves
+        )
+    else:
+        # Append nodes to the two prefixes at once
+        suffixes = available_valves + [None]
+        yield from (
+            (left_prefix + (left_valve,), right_prefix + (right_valve,))
+            for left_valve, right_valve in itertools.combinations(suffixes, r=2)
+        )
+        yield from (
+            (left_prefix + (left_valve,), right_prefix + (right_valve,))
+            for right_valve, left_valve in itertools.combinations(suffixes, r=2)
+        )
 
 
 def branch_and_bound2(graph: nx.Graph, time=26, heuristic_max: int = 0) -> int:
@@ -293,7 +311,7 @@ def branch_and_bound2(graph: nx.Graph, time=26, heuristic_max: int = 0) -> int:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    filepath = os.path.join(os.path.dirname(__file__), "input")
+    filepath = os.path.join(os.path.dirname(__file__), "test_input")
 
     graph = read_graph(filepath)
     distance = nx.floyd_warshall(graph)
