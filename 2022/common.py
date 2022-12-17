@@ -10,7 +10,7 @@ def lines(filepath: str) -> typing.Iterable[str]:
 
 
 @dataclasses.dataclass
-class Point:
+class Vector:
     """A point (a.k.a vector) on the two-dimensional integer grid."""
 
     x: int
@@ -19,8 +19,12 @@ class Point:
     def __hash__(self) -> int:
         return hash((self.x, self.y))
 
-    def __add__(self, other) -> "Point":
-        return Point(self.x + other.x, self.y + other.y)
+    def __add__(self, other) -> "Vector":
+        return Vector(self.x + other.x, self.y + other.y)
 
-    def __sub__(self, other) -> "Point":
-        return Point(self.x - other.x, self.y - other.y)
+    def __sub__(self, other) -> "Vector":
+        return Vector(self.x - other.x, self.y - other.y)
+
+
+# Keep this alias for compatibility
+Point = Vector
