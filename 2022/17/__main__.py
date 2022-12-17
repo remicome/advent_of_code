@@ -88,17 +88,38 @@ def rock_shapes(n: int = 2022) -> typing.Iterable:
         yield shape
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(repr=False)
 class RockColumn(Shape):
     """A shape with cached height."""
 
-    height: int = dataclasses.field(init=False, default=0)
+    # Retaining the top altitude for each column allows trimming all unnecessary points
+    column_tops: list = dataclasses.field(init=False)
+
+    def __post_init__(self):
+        xmin = min(point.x for point in self.points)
+        xmax = max(point.x for point in self.points)
+        self.column_tops = [
+            max(point.y for point in self.points if point.x == column)
+            for column in range(xmin, xmax + 1)
+        ]
+
+    @property
+    def height(self) -> int:
+        return 1 + max(self.column_tops)
 
     def append(self, rock: Shape):
         """Merge this rock with the rock column."""
-        self.points = self.points | rock.points
-        rock_height = 1 + max(point.y for point in rock)
-        self.height = max(self.height, rock_height)
+
+        self.column_tops = [
+            max([column_top] + [point.y for point in rock if point.x == x])
+            for x, column_top in enumerate(self.column_tops)
+        ]
+        # Trim by removing all points lower than the lowest column top
+        self.points = {
+            point
+            for point in self.points | rock.points
+            if point.y >= min(self.column_tops)
+        }
 
 
 def initial_position(shape, rock_column: RockColumn) -> Shape:
@@ -118,7 +139,8 @@ def simulate(
     chamber_width: int = 7,
 ) -> RockColumn:
     """Simulate a number of falling rocks in the chamber."""
-    rock_column = RockColumn()
+    rock_floor = {Vector(i, -1) for i in range(chamber_width)}
+    rock_column = RockColumn(rock_floor)
     jets = hot_jets(jets_input)
 
     for n, shape in tqdm(
@@ -132,8 +154,6 @@ def simulate(
             (rock_column | rock).to_string(
                 xmin=0,
                 xmax=chamber_width - 1,
-                ymin=max(0, rock_column.height - 10),
-                ymax=rock_column.height + 5,
             ),
         )
 
@@ -154,15 +174,13 @@ def simulate(
                 (rock_column | rock).to_string(
                     xmin=0,
                     xmax=chamber_width - 1,
-                    ymin=max(0, rock_column.height - 10),
-                    ymax=rock_column.height + 5,
                 ),
             )
 
             # Falling
             logger.debug("Falling")
             next_position = rock + Vector(0, -1)
-            if any(point in rock_column or point.y < 0 for point in next_position):
+            if any(point in rock_column for point in next_position):
                 logger.debug("Coming to rest position")
                 rock_column.append(rock)
                 break
@@ -173,8 +191,6 @@ def simulate(
                 (rock_column | rock).to_string(
                     xmin=0,
                     xmax=chamber_width - 1,
-                    ymin=max(0, rock_column.height - 10),
-                    ymax=rock_column.height + 5,
                 ),
             )
 
