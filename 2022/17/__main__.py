@@ -73,7 +73,7 @@ class Shape:
         return Shape(self.points | other.points)
 
 
-def rock_shapes(n: int = 2022) -> typing.Iterable:
+def rock_shapes() -> typing.Iterable:
     """Iterate on the first n falling rocks."""
     shapes = (
         Shape({Vector(0, 0), Vector(1, 0), Vector(2, 0), Vector(3, 0)}),
@@ -84,8 +84,8 @@ def rock_shapes(n: int = 2022) -> typing.Iterable:
         Shape({Vector(0, 0), Vector(0, 1), Vector(0, 2), Vector(0, 3)}),
         Shape({Vector(0, 0), Vector(1, 0), Vector(0, 1), Vector(1, 1)}),
     )
-    for _, shape in zip(range(n), itertools.cycle(shapes)):
-        yield shape
+    while True:
+        yield from shapes
 
 
 @dataclasses.dataclass(repr=False)
@@ -137,17 +137,16 @@ def simulate(
     jets_input: str,
     number_of_rocks: int = 2022,
     chamber_width: int = 7,
-) -> RockColumn:
+) -> list:
     """Simulate a number of falling rocks in the chamber."""
     rock_floor = {Vector(i, -1) for i in range(chamber_width)}
     rock_column = RockColumn(rock_floor)
-    jets = hot_jets(jets_input)
 
-    for n, shape in tqdm(
-        enumerate(rock_shapes(n=number_of_rocks)),
-        total=number_of_rocks,
-    ):
-        logger.debug(f"==== Rock {n} ====")
+    def step(
+        shape: Shape,
+        rock_column: RockColumn = rock_column,
+        jets=hot_jets(jets_input),
+    ) -> RockColumn:
         rock = initial_position(shape, rock_column=rock_column)
         logger.debug(
             "\n%s",
@@ -194,11 +193,64 @@ def simulate(
                 ),
             )
 
-    return rock_column
+        return rock_column
+
+    heights = [0]
+    for n, shape in tqdm(enumerate(rock_shapes()), total=number_of_rocks):
+        if n == number_of_rocks:
+            break
+        logger.debug(f"====== Rock {n} ======")
+        rock_column = step(shape=shape, rock_column=rock_column)
+        heights.append(rock_column.height)
+
+    return heights
+
+
+def get_periodicity(heights: list, period: typing.Optional[int] = None) -> tuple:
+    """Get the start sequence and periodicity of the successive height increases."""
+    diff = [y - x for x, y in itertools.pairwise(heights)]
+
+    if period:
+        # Use a pre-computed period
+        periods = [period]
+    else:
+        periods = range(1 + len(diff) // 2)
+
+    for period in periods:
+        for start in range(1 + len(diff) // 2):
+            if diff[start + period :] == diff[start:-period]:
+                return diff[:start], diff[start : start + period]
+    raise ValueError("No periodicity found")
+
+
+def long_run_simulation(number_of_rocks: int, start: list, periodicity: list) -> int:
+    """Compute the expected height, knowing the starting sequence and periodicity."""
+    if number_of_rocks <= len(start):
+        return sum(start[:number_of_rocks:])
+
+    quotient = (number_of_rocks - len(start)) // len(periodicity)
+    remainder = (number_of_rocks - len(start)) % len(periodicity)
+    return sum(start) + quotient * sum(periodicity) + sum(periodicity[:remainder])
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     filepath = os.path.join(os.path.dirname(__file__), "input")
-    rock_column = simulate(jets_input=filepath, number_of_rocks=2022)
-    print(f"Column height after 2022 rocks have fallen: {rock_column.height}")
+
+    # Part 1
+    number_of_rocks = 2022
+    heights = simulate(jets_input=filepath, number_of_rocks=number_of_rocks)
+    print(f"Column height after {number_of_rocks} rocks have fallen: {heights[-1]}")
+
+    # Part 2: analyze the height sequence
+    heights = simulate(jets_input=filepath, number_of_rocks=5000)
+    start, periodicity = get_periodicity(heights, period=1745)
+    print(f"Periodicity: {len(periodicity)}")
+
+    number_of_rocks = 1000000000000
+    long_run_result = long_run_simulation(
+        number_of_rocks=number_of_rocks,
+        start=start,
+        periodicity=periodicity,
+    )
+    print(f"Column height after {number_of_rocks} rocks have fallen: {long_run_result}")
