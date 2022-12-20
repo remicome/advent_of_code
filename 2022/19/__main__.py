@@ -2,7 +2,11 @@ import dataclasses
 import datetime
 import enum
 import math
+import os
+import re
 import typing
+
+from ..common import lines
 
 
 class Resource(enum.Enum):
@@ -14,6 +18,7 @@ class Resource(enum.Enum):
 
 @dataclasses.dataclass
 class BluePrint:
+    identifier: int
     ore: typing.Dict[Resource, int] = dataclasses.field(default_factory=dict)
     clay: typing.Dict[Resource, int] = dataclasses.field(default_factory=dict)
     obsidian: typing.Dict[Resource, int] = dataclasses.field(default_factory=dict)
@@ -22,7 +27,21 @@ class BluePrint:
     @classmethod
     def from_description(cls, line: str) -> "BluePrint":
         """Parse a blueprint description."""
-        return cls()
+        identifier, ore, clay, obsidian, geode = line.split("Each")
+
+        def costs(robot_string: str) -> typing.Iterable[tuple]:
+            _, _, costs = robot_string.partition("costs")
+            for cost in costs.split("and"):
+                number, resource = cost.strip(". \n").split()
+                yield Resource[resource.capitalize()], int(number)
+
+        return cls(
+            identifier=int(identifier.replace(": ", "").split(" ")[-1]),
+            ore=dict(costs(ore)),
+            clay=dict(costs(clay)),
+            obsidian=dict(costs(obsidian)),
+            geode=dict(costs(geode)),
+        )
 
 
 @dataclasses.dataclass
@@ -37,6 +56,7 @@ class State:
     """
 
     remaining_time: int = 24
+
     resources: typing.Dict[Resource, int] = dataclasses.field(default_factory=dict)
     robots: typing.Dict[Resource, int] = dataclasses.field(
         default_factory=lambda: {Resource.Ore: 1}
@@ -120,7 +140,7 @@ def max_extracted_geodes(
     # produced by this robot.
     bounds = {
         resource: min(
-            6,
+            5,
             max(
                 getattr(blueprint, robot.name.lower()).get(resource, 0)
                 for robot in Resource
@@ -128,7 +148,7 @@ def max_extracted_geodes(
         )
         for resource in Resource
     }
-    bounds[Resource.Geode] = state.remaining_time + 1  # Unbound
+    bounds[Resource.Geode] = state.remaining_time + 1  # Unbounded
 
     def _max_extracted_geodes(
         blueprint: BluePrint,
@@ -167,40 +187,12 @@ def max_extracted_geodes(
 
 
 if __name__ == "__main__":
-    blueprint = BluePrint(
-        ore={Resource.Ore: 2},
-        clay={Resource.Ore: 3},
-        obsidian={Resource.Ore: 3, Resource.Clay: 8},
-        geode={Resource.Ore: 3, Resource.Obsidian: 12},
-    )
-    start_time = datetime.datetime.now()
-    print(max_extracted_geodes(blueprint))
-    elapsed_time = datetime.datetime.now() - start_time
-    print(f"Elapsed_time: {elapsed_time}")
+    filepath = os.path.join(os.path.dirname(__file__), "test_input")
 
-# %%
-# blueprint = BluePrint(
-#     ore={Resource.Ore: 4},
-#     clay={Resource.Ore: 2},
-#     obsidian={Resource.Ore: 3, Resource.Clay: 14},
-#     geode={Resource.Ore: 2, Resource.Obsidian: 7},
-# )
-#
-#
-# robots = [
-#     Resource.Clay,
-#     Resource.Clay,
-#     Resource.Clay,
-#     # Resource.Obsidian,
-#     # Resource.Clay,
-#     # Resource.Obsidian,
-#     # Resource.Geode,
-#     # Resource.Geode,
-# ]
-# state = State()
-# for robot in robots:
-#     state = get_next_state(state, robot, blueprint)
-#     print(state)
-#
-#
-# max_extracted_geodes(blueprint, state)
+    for line in lines(filepath):
+        blueprint = BluePrint.from_description(line)
+        start_time = datetime.datetime.now()
+        geodes = max_extracted_geodes(blueprint)
+        elapsed_time = datetime.datetime.now() - start_time
+        print(f"BluePrint {blueprint.identifier}: {geodes} geodes")
+        print(f"Elapsed_time: {elapsed_time}")
