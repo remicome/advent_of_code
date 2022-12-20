@@ -1,12 +1,15 @@
 import dataclasses
 import datetime
 import enum
+import logging
 import math
 import os
 import re
 import typing
 
 from ..common import lines
+
+logger = logging.getLogger(__name__)
 
 
 class Resource(enum.Enum):
@@ -127,7 +130,6 @@ def accumulate(state: State) -> State:
     )
 
 
-# %%
 def max_extracted_geodes(
     blueprint: BluePrint,
     state: typing.Optional[State] = None,
@@ -140,7 +142,7 @@ def max_extracted_geodes(
     # produced by this robot.
     bounds = {
         resource: min(
-            5,
+            6,
             max(
                 getattr(blueprint, robot.name.lower()).get(resource, 0)
                 for robot in Resource
@@ -154,39 +156,51 @@ def max_extracted_geodes(
         blueprint: BluePrint,
         state: State,
         bounds: dict,
-    ) -> int:
+        prefix: tuple = tuple(),
+    ) -> tuple:
         """Recursively compute the maximal number of extracted geodes."""
 
         if state.remaining_time == 0:
             # No more geodes to extract
-            return state.resources.get(Resource.Geode, 0)
+            return state.resources.get(Resource.Geode, 0), prefix
 
         # Compute the next state for each choice of next robot to build
-        next_states = [
-            get_next_state(
+        next_states = {
+            robot: get_next_state(
                 state,
                 robot=robot,
                 blueprint=blueprint,
             )
             for robot in Resource
             if state.robots.get(robot, 0) < bounds[robot]
-        ]
+        }
 
         # Only retain the path for which we could actually build a robot
-        next_states = [next_state for next_state in next_states if next_state]
+        next_states = {
+            robot: next_state for robot, next_state in next_states.items() if next_state
+        }
         # Last possibility: don't build any robot and accumulate resources
-        next_states.append(accumulate(state))
+        next_states[None] = accumulate(state)
 
         # Add in possible geodes extracted during this state
-        return max(
-            _max_extracted_geodes(blueprint=blueprint, state=next_state, bounds=bounds)
-            for next_state in next_states
+        geodes = (
+            _max_extracted_geodes(
+                blueprint=blueprint,
+                state=next_state,
+                bounds=bounds,
+                prefix=prefix + (robot,),
+            )
+            for robot, next_state in next_states.items()
         )
+        return max(geodes, key=lambda k: k[0])
 
-    return _max_extracted_geodes(blueprint, state=state, bounds=bounds)
+    geodes, path = _max_extracted_geodes(blueprint, state=state, bounds=bounds)
+    logger.debug(f"Optimal strategy: {path}")
+    return geodes
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
     filepath = os.path.join(os.path.dirname(__file__), "test_input")
 
     for line in lines(filepath):
