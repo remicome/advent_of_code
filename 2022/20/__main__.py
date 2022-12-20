@@ -3,6 +3,8 @@ import logging
 import pathlib
 import typing
 
+import tqdm
+
 from ..common import lines
 
 logger = logging.getLogger(__name__)
@@ -24,7 +26,16 @@ def inputs(filepath: str) -> typing.Iterable[Input]:
         yield Input(value=int(line), position=position)
 
 
-def mix(inputs: typing.Iterable[Input]) -> typing.List[Input]:
+def decrypt(
+    inputs: typing.Iterable[Input], decryption_key=811589153
+) -> typing.Iterable[Input]:
+    return (
+        Input(value=item.value * decryption_key, position=item.position)
+        for item in inputs
+    )
+
+
+def mix(inputs: typing.Iterable[Input], repeat: int = 1) -> typing.List[Input]:
     """Decrypt input iterable"""
 
     def mix_item(item: Input, current_list: typing.List[Input]) -> typing.List[Input]:
@@ -38,19 +49,30 @@ def mix(inputs: typing.Iterable[Input]) -> typing.List[Input]:
         next_list.pop(index)
         return next_list[:target_index] + [item] + next_list[target_index:]
 
-    current_list = list(inputs)
-    logger.debug("Initial arrangement:")
-    logger.debug(current_list)
-    for item in current_list:
-        logger.debug(f"Moving item {item.position} with value {item.value}:")
-        current_list = mix_item(item, current_list=current_list)
+    def mix_once(inputs: typing.Iterable[Input]) -> typing.Iterable[Input]:
+        current_list = list(inputs)
+        logger.debug("Initial arrangement:")
         logger.debug(current_list)
 
-    return current_list
+        # Sort by inputs' original position
+        for item in sorted(current_list, key=lambda item: item.position):
+            logger.debug(f"Moving item {item.position} with value {item.value}:")
+            current_list = mix_item(item, current_list=current_list)
+            logger.debug(current_list)
+
+        return current_list
+
+    for rnd in tqdm.trange(repeat):
+        logger.debug(f"===== Round {rnd} =====")
+        inputs = mix_once(inputs)
+        logger.debug("Result:")
+        logger.debug(inputs)
+
+    return inputs
 
 
-def grove_coordinates(inputs: typing.Iterable[Input]) -> tuple:
-    mixed_values = [item.value for item in mix(inputs)]
+def grove_coordinates(mixed: typing.Iterable[Input]) -> tuple:
+    mixed_values = [item.value for item in mixed]
     zero_index = mixed_values.index(0)
     indices = ((zero_index + index) % len(mixed_values) for index in (1000, 2000, 3000))
     return tuple(mixed_values[index] for index in indices)
@@ -59,5 +81,13 @@ def grove_coordinates(inputs: typing.Iterable[Input]) -> tuple:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     filepath = pathlib.Path(__file__).parent / "input"
-    x, y, z = grove_coordinates(inputs(filepath))
+
+    # Part 1
+    x, y, z = grove_coordinates(mix(inputs(filepath)))
     print(f"Coordinate sum: {x + y + z}")
+
+    # Part 2
+    decrypted_inputs = decrypt(inputs(filepath))
+    mixed = mix(decrypted_inputs, repeat=10)
+    x, y, z = grove_coordinates(mixed)
+    print(f"Decrypted coordinate sum: {x + y + z}")
