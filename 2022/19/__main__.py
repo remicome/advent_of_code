@@ -1,4 +1,5 @@
 import dataclasses
+import datetime
 import enum
 import math
 import typing
@@ -106,63 +107,97 @@ def accumulate(state: State) -> State:
     )
 
 
+# %%
 def max_extracted_geodes(
     blueprint: BluePrint,
     state: typing.Optional[State] = None,
 ) -> int:
-    """Compute the maximal number of extracted geodes from given state."""
+    """Compute the maximal number of extracted geodes for this blueprint."""
     if state is None:
         state = State()
 
-    if state.remaining_time == 0:
-        # No more geodes to extract
-        return state.resources.get(Resource.Geode, 0)
-
-    # Compute the next state for each choice of next robot to build
-    next_states = [
-        get_next_state(
-            state,
-            robot=robot,
-            blueprint=blueprint,
+    # No use building more robots than the maximal number of needed resource
+    # produced by this robot.
+    bounds = {
+        resource: max(
+            getattr(blueprint, robot.name.lower()).get(resource, 0)
+            for robot in Resource
         )
-        for robot in Resource
-    ]
+        for resource in Resource
+    }
+    bounds[Resource.Geode] = state.remaining_time + 1  # Unbound
 
-    # Only retain the path for which we could actually build a robot
-    next_states = [next_state for next_state in next_states if next_state]
-    # Last possibility: don't build any robot and accumulate resources
-    next_states.append(accumulate(state))
+    def _max_extracted_geodes(
+        blueprint: BluePrint,
+        state: State,
+        bounds: dict,
+    ) -> int:
+        """Recursively compute the maximal number of extracted geodes."""
 
-    # Add in possible geodes extracted during this state
-    return max(
-        max_extracted_geodes(blueprint=blueprint, state=next_state)
-        for next_state in next_states
+        if state.remaining_time == 0:
+            # No more geodes to extract
+            return state.resources.get(Resource.Geode, 0)
+
+        # Compute the next state for each choice of next robot to build
+        next_states = [
+            get_next_state(
+                state,
+                robot=robot,
+                blueprint=blueprint,
+            )
+            for robot in Resource
+            if state.robots.get(robot, 0) < bounds[robot]
+        ]
+
+        # Only retain the path for which we could actually build a robot
+        next_states = [next_state for next_state in next_states if next_state]
+        # Last possibility: don't build any robot and accumulate resources
+        next_states.append(accumulate(state))
+
+        # Add in possible geodes extracted during this state
+        return max(
+            _max_extracted_geodes(blueprint=blueprint, state=next_state, bounds=bounds)
+            for next_state in next_states
+        )
+
+    return _max_extracted_geodes(blueprint, state=state, bounds=bounds)
+
+
+if __name__ == "__main__":
+    blueprint = BluePrint(
+        ore={Resource.Ore: 4},
+        clay={Resource.Ore: 2},
+        obsidian={Resource.Ore: 3, Resource.Clay: 14},
+        geode={Resource.Ore: 2, Resource.Obsidian: 7},
     )
-
+    start_time = datetime.datetime.now()
+    print(max_extracted_geodes(blueprint))
+    elapsed_time = datetime.datetime.now() - start_time
+    print(f"Elapsed_time: {elapsed_time}")
 
 # %%
-blueprint = BluePrint(
-    ore={Resource.Ore: 4},
-    clay={Resource.Ore: 2},
-    obsidian={Resource.Ore: 3, Resource.Clay: 14},
-    geode={Resource.Ore: 2, Resource.Obsidian: 7},
-)
-
-
-robots = [
-    Resource.Clay,
-    Resource.Clay,
-    Resource.Clay,
-    Resource.Obsidian,
-    Resource.Clay,
-    Resource.Obsidian,
-    Resource.Geode,
-    Resource.Geode,
-]
-state = State()
-for robot in robots:
-    state = get_next_state(state, robot, blueprint)
-    print(state)
-
-
-max_extracted_geodes(blueprint, state=state)
+# blueprint = BluePrint(
+#     ore={Resource.Ore: 4},
+#     clay={Resource.Ore: 2},
+#     obsidian={Resource.Ore: 3, Resource.Clay: 14},
+#     geode={Resource.Ore: 2, Resource.Obsidian: 7},
+# )
+#
+#
+# robots = [
+#     Resource.Clay,
+#     Resource.Clay,
+#     Resource.Clay,
+#     # Resource.Obsidian,
+#     # Resource.Clay,
+#     # Resource.Obsidian,
+#     # Resource.Geode,
+#     # Resource.Geode,
+# ]
+# state = State()
+# for robot in robots:
+#     state = get_next_state(state, robot, blueprint)
+#     print(state)
+#
+#
+# max_extracted_geodes(blueprint, state)
