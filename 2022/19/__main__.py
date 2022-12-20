@@ -119,9 +119,12 @@ def max_extracted_geodes(
     # No use building more robots than the maximal number of needed resource
     # produced by this robot.
     bounds = {
-        resource: max(
-            getattr(blueprint, robot.name.lower()).get(resource, 0)
-            for robot in Resource
+        resource: min(
+            6,
+            max(
+                getattr(blueprint, robot.name.lower()).get(resource, 0)
+                for robot in Resource
+            ),
         )
         for resource in Resource
     }
@@ -165,10 +168,10 @@ def max_extracted_geodes(
 
 if __name__ == "__main__":
     blueprint = BluePrint(
-        ore={Resource.Ore: 4},
-        clay={Resource.Ore: 2},
-        obsidian={Resource.Ore: 3, Resource.Clay: 14},
-        geode={Resource.Ore: 2, Resource.Obsidian: 7},
+        ore={Resource.Ore: 2},
+        clay={Resource.Ore: 3},
+        obsidian={Resource.Ore: 3, Resource.Clay: 8},
+        geode={Resource.Ore: 3, Resource.Obsidian: 12},
     )
     start_time = datetime.datetime.now()
     print(max_extracted_geodes(blueprint))
