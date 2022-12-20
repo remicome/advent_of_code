@@ -133,23 +133,33 @@ def accumulate(state: State) -> State:
 def max_extracted_geodes(
     blueprint: BluePrint,
     state: typing.Optional[State] = None,
+    maximum_number_of_robots: typing.Optional[int] = None,
 ) -> int:
-    """Compute the maximal number of extracted geodes for this blueprint."""
+    """Compute the maximal number of extracted geodes for this blueprint.
+
+    Args:
+        * maximum_number_of_robots: an overall maximum number of robots of each type.
+          Use it to constrain the path search.
+    """
+    start_time = datetime.datetime.now()
+
     if state is None:
         state = State()
 
     # No use building more robots than the maximal number of needed resource
     # produced by this robot.
     bounds = {
-        resource: min(
-            6,
-            max(
-                getattr(blueprint, robot.name.lower()).get(resource, 0)
-                for robot in Resource
-            ),
+        resource: max(
+            getattr(blueprint, robot.name.lower()).get(resource, 0)
+            for robot in Resource
         )
         for resource in Resource
     }
+    if maximum_number_of_robots:
+        bounds = {
+            resource: min(bound, maximum_number_of_robots)
+            for resource, bound in bounds.items()
+        }
     bounds[Resource.Geode] = state.remaining_time + 1  # Unbounded
 
     def _max_extracted_geodes(
@@ -159,6 +169,7 @@ def max_extracted_geodes(
         prefix: tuple = tuple(),
     ) -> tuple:
         """Recursively compute the maximal number of extracted geodes."""
+        logger.debug(state.robots)
 
         if state.remaining_time == 0:
             # No more geodes to extract
@@ -195,18 +206,29 @@ def max_extracted_geodes(
         return max(geodes, key=lambda k: k[0])
 
     geodes, path = _max_extracted_geodes(blueprint, state=state, bounds=bounds)
+    elapsed_time = datetime.datetime.now() - start_time
+    logger.debug(f"BluePrint {blueprint.identifier}: {geodes} geodes")
     logger.debug(f"Optimal strategy: {path}")
+    logger.debug(f"Elapsed time: {elapsed_time}")
     return geodes
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    filepath = os.path.join(os.path.dirname(__file__), "test_input")
+    filepath = os.path.join(os.path.dirname(__file__), "input")
 
-    for line in lines(filepath):
-        blueprint = BluePrint.from_description(line)
-        start_time = datetime.datetime.now()
-        geodes = max_extracted_geodes(blueprint)
-        elapsed_time = datetime.datetime.now() - start_time
-        print(f"BluePrint {blueprint.identifier}: {geodes} geodes")
-        print(f"Elapsed_time: {elapsed_time}")
+    def quality(blueprint: BluePrint) -> int:
+        return blueprint.identifier * max_extracted_geodes(
+            blueprint, maximum_number_of_robots=10
+        )
+
+    blueprints = [BluePrint.from_description(line) for line in lines(filepath)]
+    # total_quality = sum(quality(blueprint) for blueprint in blueprints)
+    # print(f"Total quality: {total_quality}")
+
+    # Part 2
+    a, b, c = (
+        max_extracted_geodes(blueprint, state=State(remaining_time=32))
+        for blueprint in blueprints[:3]
+    )
+    print(f"Product of geode quantities: {a * b * c}")
