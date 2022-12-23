@@ -1,5 +1,6 @@
 import collections
 import dataclasses
+import itertools
 import logging
 import pathlib
 import typing
@@ -32,7 +33,7 @@ def initial_state(filepath: str) -> tuple:
     return read_elves(filepath), directions
 
 
-def round(elves: set, directions: tuple) -> tuple:
+def play_round(elves: set, directions: tuple) -> tuple:
     """Move for one round."""
     next_positions = {
         elf: next_position(elf, elves=elves, directions=directions) for elf in elves
@@ -107,23 +108,39 @@ def plot(elves) -> str:
     )
 
 
-def simulate(number_of_rounds: int = 10) -> int:
-    """Return the covered empty area after a number of rounds."""
+def simulate(filepath: str) -> typing.Iterable[set]:
+    """Iterate on successive elves positions."""
     elves, directions = initial_state(filepath)
     logger.debug(f"===== Initial position =====\n{plot(elves)}")
+    yield elves
 
-    n_rounds = 10
-    for i in tqdm.trange(n_rounds):
-        elves, directions = round(elves, directions)
-        logger.debug(f"===== Round {i} =====\n{plot(elves)}")
-    return covered_empty_ground(elves)
+    n = 0
+    while True:
+        n += 1
+        elves, directions = play_round(elves, directions)
+        logger.debug(f"===== Round {n} =====\n{plot(elves)}")
+        yield elves
 
 
 if __name__ == "__main__":
     filepath = pathlib.Path(__file__).parent / "input"
     logging.basicConfig(level=logging.INFO)
 
+    # Part 1: play 10 rounds
     n_rounds = 10
-    covered_ground = simulate(number_of_rounds=n_rounds)
+    for i, elves in zip(range(n_rounds + 1), simulate(filepath)):
+        pass
+    covered_ground = covered_empty_ground(elves)
 
     print(f"Covered empty ground after {n_rounds} rounds: {covered_ground} units")
+
+    # Part 2: play until no more elves are moving
+    elve_pairs = itertools.pairwise(simulate(filepath))
+    round_number = 0
+    for n, (last_elves, elves) in enumerate(elve_pairs):
+        round_number = n + 1
+        if round_number % 10 == 0:
+            logger.info(f"Round {round_number}")
+        if last_elves == elves:
+            break
+    print(f"First round where no elf moves: {round_number}")
