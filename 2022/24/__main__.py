@@ -1,4 +1,5 @@
 import dataclasses
+import itertools
 import pathlib
 import typing
 
@@ -61,7 +62,10 @@ class Valley:
 
 
 def blizzard_positions(valley: Valley) -> typing.Iterable[set]:
-    """Iterate on blizzards positions."""
+    """
+    Iterate on blizzards positions. The n-th yielded value if the set of blizzards
+    positions at the end of the n-th minute.
+    """
 
     def next_position(blizzard, valley) -> Blizzard:
         next_position = next(blizzard)
@@ -77,12 +81,20 @@ def blizzard_positions(valley: Valley) -> typing.Iterable[set]:
     blizzards = valley.blizzards
 
     while True:
-        yield blizzards
         blizzards = {next_position(blizzard, valley) for blizzard in blizzards}
+        yield blizzards
 
 
-def possible_positions(valley) -> typing.Iterable[set]:
-    """Iterate on the set of possible positions at step n."""
+def possible_positions(
+    valley: Valley,
+    origin: typing.Optional[Vector] = None,
+    blizzards_iterator: typing.Optional[typing.Iterable] = None,
+) -> typing.Iterable[set]:
+    """
+    Iterate on the set of possible positions at step n. The first yielded value is
+    the origin singleton, then the n-th value is the set of all reachable positions at
+    step n.
+    """
 
     def neighbours(position: Vector, valley: Valley = valley) -> set:
         """All neighbours for this position (itself included)"""
@@ -101,25 +113,51 @@ def possible_positions(valley) -> typing.Iterable[set]:
             or (0 <= neighbour.x < valley.width and 0 <= neighbour.y < valley.height)
         }
 
-    positions = {valley.origin}
+    positions = {origin if origin else valley.origin}
     yield positions  # Initial position
 
-    blizzards_iterator = blizzard_positions(valley)
-    # Pass initial blizzards position: we move at the same time
-    next(blizzards_iterator)
+    if blizzards_iterator is None:
+        # Start at minute 0
+        blizzards_iterator = blizzard_positions(valley)
+
     for blizzards in blizzards_iterator:
         candidates = set.union(*(neighbours(position) for position in positions))
         positions = candidates - {blizzard.position for blizzard in blizzards}
         yield positions
 
 
-def shortest_path_length(valley: Valley) -> int:
+def shortest_path_length(
+    valley: Valley,
+    targets: typing.Optional[tuple] = None,
+) -> int:
     """Return the first minute the target may be reached from origin."""
-    for step, positions in enumerate(possible_positions(valley)):
-        if valley.target in positions:
-            break
+    if targets is None:
+        targets = (valley.target,)
 
-    return step
+    passing_points = (valley.origin,) + targets
+    blizzards_iterator = blizzard_positions(valley)
+
+    def _shortest_path_length(
+        origin: Vector,
+        target: Vector,
+        blizzards_iterator=blizzards_iterator,
+    ) -> int:
+        positions_iterator = possible_positions(
+            valley,
+            origin=origin,
+            blizzards_iterator=blizzards_iterator,
+        )
+        for step, positions in enumerate(positions_iterator):
+            if target in positions:
+                break
+
+        return step
+
+    path_lengths = (
+        _shortest_path_length(origin=origin, target=target)
+        for origin, target in itertools.pairwise(passing_points)
+    )
+    return sum(path_lengths)
 
 
 if __name__ == "__main__":
@@ -128,4 +166,12 @@ if __name__ == "__main__":
     # Part 1
     valley = Valley.from_input(filepath)
     steps = shortest_path_length(valley)
+    print(f"Valley exit may be reached in {steps} steps.")
+
+    # Part 2
+    valley = Valley.from_input(filepath)
+    steps = shortest_path_length(
+        valley,
+        targets=(valley.target, valley.origin, valley.target),
+    )
     print(f"Valley exit may be reached in {steps} steps.")
