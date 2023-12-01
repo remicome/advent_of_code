@@ -26,11 +26,11 @@ def calibration_number(line: str) -> int:
 
 
 def first_number(line: str, spelling=SPELLING) -> int:
-    index_of_ = {
-        number: index(number, line=line, spelling=spelling) for number in NUMBERS
-    }
-    index_of = {number: idx for number, idx in index_of_.items() if idx is not None}
-    return min(index_of.keys(), key=lambda number: index_of[number])
+    number = prefix_number(line, spelling=spelling)
+    if number:
+        return number
+    else:
+        return first_number(line[1:], spelling=spelling)
 
 
 def last_number(line: str) -> int:
@@ -38,29 +38,12 @@ def last_number(line: str) -> int:
     return first_number(reverse(line), spelling=reversed_spelling)
 
 
-def index(number: int, line: str, spelling=SPELLING) -> typing.Optional[int]:
-    """
-    Find the first occurence of the number in the given line (either as a digit of
-    spelled out).
-    """
-    try:
-        digit_index = line.index(str(number))
-    except ValueError:
-        digit_index = None
-
-    try:
-        string_index = line.index(spelling[number])
-    except ValueError:
-        string_index = None
-
-    if string_index is None and digit_index is None:
-        return None
-    elif string_index is None:
-        return digit_index
-    elif digit_index is None:
-        return string_index
-    else:
-        return min(digit_index, string_index)
+def prefix_number(line: str, spelling: dict) -> typing.Optional[int]:
+    """If the line starts with a number, return this number."""
+    for number, spelled_number in spelling.items():
+        if line.startswith(str(number)) or line.startswith(spelled_number):
+            return number
+    return None
 
 
 def reverse(s: str) -> str:
