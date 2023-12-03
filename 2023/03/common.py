@@ -11,9 +11,10 @@ from ..common import lines
 class Number:
     value: int
     adjacent_characters: typing.List[str]
+    adjacent_stars: typing.List[Point]
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Point:
     x: int
     y: int
@@ -76,9 +77,15 @@ def current_parsed_number(
         starting_position=starting_position,
         length=len(number_string),
     )
+    adjacent_stars = read_adjacent_stars(
+        grid,
+        starting_position=starting_position,
+        length=len(number_string),
+    )
     return Number(
         value=int(number_string),
         adjacent_characters=adjacent_characters,
+        adjacent_stars=adjacent_stars,
     )
 
 
@@ -87,6 +94,37 @@ def read_adjacent_characters(
     starting_position: Point,
     length: int,
 ) -> typing.List[str]:
+    return [
+        grid[position]
+        for position in adjacent_positions(
+            grid,
+            starting_position=starting_position,
+            length=length,
+        )
+    ]
+
+
+def read_adjacent_stars(
+    grid: CharacterGrid,
+    starting_position: Point,
+    length: int,
+) -> typing.List[Point]:
+    return [
+        position
+        for position in adjacent_positions(
+            grid,
+            starting_position=starting_position,
+            length=length,
+        )
+        if grid[position] == "*"
+    ]
+
+
+def adjacent_positions(
+    grid: CharacterGrid,
+    starting_position: Point,
+    length: int,
+) -> typing.Iterable[Point]:
     above = [
         starting_position + Point(offset, 0) + Point(0, -1) for offset in range(length)
     ]
@@ -97,8 +135,7 @@ def read_adjacent_characters(
     right = [starting_position + Point(length, y) for y in (-1, 0, 1)]
 
     adjacent_positions = above + below + left + right
-
-    return [grid[position] for position in adjacent_positions if position in grid]
+    return (position for position in adjacent_positions if position in grid)
 
 
 class CharacterGrid:
