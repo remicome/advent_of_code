@@ -31,9 +31,14 @@ class Card:
         )
 
     @property
-    def points(self) -> int:
+    def match_count(self) -> int:
         intersection = self.numbers & self.winning_numbers
-        return 2 ** (len(intersection) - 1) if intersection else 0
+        return len(intersection)
+
+    @property
+    def points(self) -> int:
+        match_count = self.match_count
+        return 2 ** (match_count - 1) if match_count else 0
 
 
 def parse_numbers_string(numbers_string: str) -> typing.Set[int]:
